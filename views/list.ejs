@@ -1,0 +1,26 @@
+<%- include("header"); -%> 
+<!--Some code in some pages of a website is same and to avoid repetation we put repeted code in a file 
+and then we include them all the files that you want to work with ejs templates or layouts you need 
+the files to be present in views folder -->
+<body>
+    <div class="box" id="heading">
+      <h1 ><%=listTitle%></h1>
+    </div>
+
+    <div class="box">
+
+    <ul>
+      <% for(var i=0 ; i<usersTask.length; i++) { %>
+        <div class="item">
+          <input type="checkbox" name="" id="">
+        <p><%=usersTask[i] %></p>
+      </div>
+      <% } %>
+    </ul>
+ 
+    <form action="/" method="post" class="item">
+       <input type="text" placeholder="Your new task" name="newTask">
+       <button type="submit" name="button" value="<%= listTitle %>">+</button>
+    </form>
+  </div>
+  <%- include("footer"); -%>
