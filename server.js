@@ -1,50 +1,146 @@
 const express = require("express");
-const app = express();
 const bodyParser = require("body-parser");
-const date = require(__dirname + "/date.js")
+const mongoose = require("mongoose");
+const lodash = require("lodash")
 
+const app = express();
 
-app.use(express.static('static'))
+app.set("view engine", "ejs");
 
-app.use(bodyParser.urlencoded({extended:true}));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static("public"));
 
-app.set("view engine" , "ejs");
-
-let tasks =[];
-
-let workTasks = [];
-
-app.get("/",(req,res)=>{
-   var day = date.getDate();
-   res.render("list",{listTitle:day,usersTask:tasks});
-   //Question: Why do we send back the whole array of tasks when someone just inputs a new task as we just we just displayed everything previously will this not cause redisplaying it again?
-   //Answer: We need to send the whole array again and redisplay the previous componets back as when we get redirected to the 
-   //home route we send all the tasks again and also the previous tasks we have aldready rendered when we render it to the 
-   //user the whole list.ejs doesn't store any previous data we sent and all the data should be sent to the file list.ejs 
-   //for displaying as all the previous data is lost when we get redirected as list.ejs has no place to store the previous data
+mongoose.connect("mongodb+srv://admin-123:arj@cluster0.ygmfo.mongodb.net/todoDB?retryWrites=true&w=majority", {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
-app.post("/",(req,res)=>{
-   if(req.body.button == "Work List")
-   {
-       workTasks.push(req.body.newTask);
-       res.redirect("/work")
-   }
-   else{
-    let task = req.body.newTask;
-    tasks.push(task);
+
+const todoSchema = {
+  task: {
+    type: String,
+  },
+};
+
+const listSchema = {
+  listName: String,
+  items: [todoSchema],
+};
+
+const List = mongoose.model("customList", listSchema);
+
+const Todolist = mongoose.model("userTask", todoSchema);
+
+const task1 = new Todolist({
+  task: "Welcome",
+});
+
+const task2 = new Todolist({
+  task: "Click on + to add your task",
+});
+
+const task3 = new Todolist({
+  task: "<-- Click here to delete your task",
+});
+
+var defaultItems = [task1, task2, task3];
+
+app.get("/", function (req, res) {
+  Todolist.find((err, data) => {
+    if (data.length == 0) {
+      Todolist.insertMany(defaultItems, (err) => {
+        console.log("Sucssesfully inserted data.");
+      });
+      res.redirect("/");
+    } else {
+      res.render("list", { listTitle: "Today", newListItems: data });
+    }
+  });
+});
+
+app.post("/", function (req, res) {
+  let newItem = req.body.newItem;
+  let currentlistname = req.body.list;
+   
+  var insertItem = {
+    task:newItem,
+  }
+
+  
+  if (currentlistname == "Today") {
+    let newTodo = new Todolist({
+      task: newItem,
+    });
+
+    newTodo.save(function(){
+      res.redirect("/");
+    });
+    
+  } 
+  else {
+    List.findOne({ listName: currentlistname }, (err,listFound) => {
+   
+      listFound.items.push(insertItem);
+      listFound.save();
+    });
+    res.redirect("/" + currentlistname);
+  }
+});
+
+app.post("/remove", (req, res) => {
+  let checkedItem = req.body.checkBox;
+  let name = req.body.listName;
+
+  if (name == "Today") {
+    //Here we get to now the item we got back is from default list and then delete it from there.
+    Todolist.deleteOne({ _id: checkedItem }, (err) => {
+      if (err) {
+        console.log(err);
+      }
+    });
     res.redirect("/");
-   }
+  }
+  else{
+   //this is the part we try to find which custom list it is and delete the task from the list
+   List.findOneAndUpdate(
+     { listName : name },
+     { $pull:{items:{_id : checkedItem}}},(err , result)=>{
+        //callback function which executes after the operation is done
+        res.redirect("/" + name);
+      })
+  }
  
-})
-
-app.get("/work",(req,res)=>{
-  res.render("list",{listTitle:"Work List",usersTask:workTasks})
 });
 
-app.get("/about",(req,res)=>{
-    res.render("about");
-})
+app.get("/:customlistName", function (req, res) {
+  //Now here the reason we are getting a document called favicon.io is cause to the localhost the 
+  //browser makes a get request to get the favicon and that get request made by the browser is 
+  //catched by us as our program thinks that it is a parameter and catches it over here it can be solved by
+  //chnging the route to the parameter.
+  let customlistName = lodash.capitalize(req.params.customlistName);
 
-app.listen(3000,(req,res) =>{
-    console.log("succesfully hosted the files to the port 3000.");
+  List.findOne({ listName: customlistName }, (err, foundData) => {
+    if (foundData == null) {
+      //this is the part where the list is not present and we need to create new list and add default items to it
+      const list = new List({
+        listName: customlistName,
+        items: defaultItems,
+      });
+      list.save(function () {
+        res.redirect("/" + customlistName);
+      });
+      
+    } else {
+      //here the list exits and we need to take the aldready present list and display it
+      res.render("list", {
+        listTitle: foundData.listName,
+        newListItems: foundData.items,
+      });
+    }
+   });
 });
+
+let port = process.env.PORT;
+if (port == null || port == "") {
+  port = 3000;
+}
+app.listen(port);
